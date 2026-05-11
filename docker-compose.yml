@@ -2,9 +2,9 @@ services:
   postgres:
     image: postgres:15
     environment:
-      POSTGRES_DB: appdb
-      POSTGRES_USER: user
-      POSTGRES_PASSWORD: password
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     ports:
       - "5432:5432"
     volumes:
@@ -17,17 +17,17 @@ services:
       - "5672:5672"
       - "15672:15672"
     environment:
-      RABBITMQ_DEFAULT_USER: user
-      RABBITMQ_DEFAULT_PASS: password
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS}
 
   backend:
     build: ./backend
     environment:
-      - DATABASE_URL=postgresql://user:password@postgres:5432/appdb
-      - RABBITMQ_URL=amqp://user:password@rabbitmq:5672
-      - JWT_SECRET=your_jwt_secret
-      - STRIPE_PUBLISHABLE_KEY=pk_test_51ReXBn08p1kJLykgZcT9pbKQTsIgUowG8hmgqVNA2q7JjlUu2cjqs1081SfBQFfg4b5uFu8eJtF7yHQCUmEznTOm00t3Um7bgY
-      - STRIPE_SECRET_KEY=sk_test_51ReXBn08p1kJLykgdV9T87rmOoYK2yMvjDDDdNO4UyMN7iFsDZu2dVmF9GDzAipum6wYCymYT6BnbW2SBOAwA7Ye00a24OvRNK
+      - DATABASE_URL=${DATABASE_URL}
+      - RABBITMQ_URL=${RABBITMQ_URL}
+      - JWT_SECRET=${JWT_SECRET}
+      - STRIPE_PUBLISHABLE_KEY=${STRIPE_PUBLISHABLE_KEY}
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
     depends_on:
       - postgres
       - rabbitmq
@@ -38,8 +38,8 @@ services:
   worker:
     build: ./worker
     environment:
-      - DATABASE_URL=postgresql://user:password@postgres:5432/appdb
-      - RABBITMQ_URL=amqp://user:password@rabbitmq:5672
+      - DATABASE_URL=${DATABASE_URL}
+      - RABBITMQ_URL=${RABBITMQ_URL}
     depends_on:
       - postgres
       - rabbitmq
