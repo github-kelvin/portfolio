@@ -2,12 +2,21 @@ name: Deploy Services
 
 on:
   workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'production'
+        type: choice
+        options:
+          - production
+          - staging
 
 jobs:
   deploy:
-    name: Deploy to Production
+    name: Deploy to ${{ inputs.environment }}
     runs-on: ubuntu-latest
-    environment: production
+    environment: ${{ inputs.environment }}
 
     steps:
       - name: Checkout repository
@@ -19,16 +28,12 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           known_hosts: ${{ secrets.SSH_KNOWN_HOSTS }}
 
-      - name: Build env file
-        run: |
-          echo "${{ secrets.ENV_FILE }}" > .env
-
       - name: Deploy to server
         run: |
           ssh -o StrictHostKeyChecking=no ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << 'EOF'
-            cd /app/portfolio
+            cd /path/to/your/app
             git pull origin main
             docker compose down
-            docker compose --env-file .env build
-            docker compose --env-file .env up
+            docker compose up --build -d
+            docker compose logs -f --tail=50
           EOF

@@ -10,7 +10,49 @@ A full-stack web application with React frontend, Node.js backend API, worker se
 - Subscription purchase via Stripe Checkout
 - Payment history
 
-## Setup
+## Deployment
+
+### Manual Deployment via GitHub Actions
+
+The application can be deployed manually to a remote server using GitHub Actions.
+
+#### Setup
+
+1. **Server Requirements**: Ensure your deployment server has:
+   - Docker and Docker Compose installed
+   - SSH access configured
+   - Git repository cloned at `/path/to/your/app`
+
+2. **GitHub Secrets Configuration**:
+   Add the following secrets to your GitHub repository:
+   - `SSH_PRIVATE_KEY`: Private SSH key for server access
+   - `SSH_KNOWN_HOSTS`: SSH known hosts entry for the server
+   - `SSH_USER`: SSH username for the server
+   - `SSH_HOST`: Server hostname or IP address
+
+3. **Environment Variables**:
+   Ensure your `.env` file is present on the server with all required environment variables.
+
+#### Deployment Process
+
+1. Go to the **Actions** tab in your GitHub repository
+2. Select **Deploy Services** workflow
+3. Click **Run workflow**
+4. Choose the environment (production/staging)
+5. Click **Run workflow**
+
+The workflow will:
+- Connect to your server via SSH
+- Pull the latest code changes
+- Rebuild and restart all services with Docker Compose
+- Display deployment logs
+
+#### Data Persistence
+
+- **PostgreSQL**: Data persists in the `postgres_data` Docker volume
+- **Redis**: Data persists in the `redis_data` Docker volume with append-only file
+
+### Local Development
 
 1. Ensure Docker and Docker Compose are installed.
 
