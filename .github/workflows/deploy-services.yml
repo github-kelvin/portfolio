@@ -27,5 +27,5 @@ jobs:
             echo "${{ secrets.ENV_FILE }}" > .env
             docker compose down
             docker compose --env-file .env build
-            docker compose --env-file .env up
+            docker compose --env-file .env up -d
           EOF
