@@ -120,7 +120,7 @@ function Home() {
               ))}
             </div>
             <div className="section-actions">
-              <a href="#contact" className="btn btn-primary">View Demo</a>
+              <Link to="/demo" className="btn btn-primary">View Demo</Link>
             </div>
           </section>
 

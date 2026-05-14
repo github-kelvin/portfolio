@@ -1,5 +1,7 @@
 FROM node:18-alpine
 
+ARG VITE_STRIPE_PUBLISHABLE_KEY
+
 WORKDIR /app
 
 COPY package*.json ./
@@ -13,6 +15,7 @@ RUN npm run build
 FROM nginx:alpine
 
 COPY --from=0 /app/dist /usr/share/nginx/html
+COPY ./docker/nginx.frontend.conf /etc/nginx/conf.d/default.conf
 
 EXPOSE 80
 

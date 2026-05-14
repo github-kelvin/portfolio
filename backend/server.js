@@ -1,178 +1,445 @@
 const express = require('express');
-const { Pool } = require('pg');
-const jwt = require('jsonwebtoken');
-const bcrypt = require('bcryptjs');
-const amqp = require('amqplib');
 const cors = require('cors');
-const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+const fs = require('fs');
+const { Pool } = require('pg');
+const { createClient } = require('redis');
+const bcrypt = require('bcryptjs');
 require('dotenv').config();
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
 const app = express();
-app.use(cors());
+app.use(cors({
+  origin: true,
+  credentials: true,
+}));
 app.use(express.json());
+
+// Helper function to parse cookies
+const parseCookies = (cookieHeader) => {
+  if (!cookieHeader) return {};
+  return Object.fromEntries(
+    cookieHeader.split('; ').map(c => {
+      const [name, value] = c.split('=');
+      return [name, decodeURIComponent(value || '')];
+    })
+  );
+};
+
+// Helper function to generate user ID
+const generateUserId = () => {
+  return `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+};
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
 });
 
-let channel;
+const redisClient = createClient({
+  url: process.env.REDIS_URL || 'redis://localhost:6379',
+});
 
-async function connectRabbitMQ(retries = 0) {
-  try {
-    const connection = await amqp.connect(process.env.RABBITMQ_URL);
-    channel = await connection.createChannel();
-    await channel.assertQueue('payment_queue');
-    console.log('RabbitMQ connected');
-  } catch (error) {
-    console.error('RabbitMQ connection failed:', error.message);
-    if (retries < 10) {
-      const delay = 5000;
-      console.log(`Retrying RabbitMQ connection in ${delay / 1000}s...`);
-      await new Promise((resolve) => setTimeout(resolve, delay));
-      await connectRabbitMQ(retries + 1);
-    } else {
-      console.error('RabbitMQ unreachable after retries. Continuing without queue.');
-    }
-  }
-}
+redisClient.on('error', (err) => console.error('Redis error:', err));
+redisClient.connect().catch(console.error);
 
-connectRabbitMQ();
+const MONTHLY_HARD_LIMIT = 1_000_000; // 1M tokens
+const DAILY_SOFT_LIMIT = 100_000; // 100k tokens
 
-const authenticateToken = (req, res, next) => {
-  const token = req.header('Authorization')?.split(' ')[1];
-  if (!token) return res.status(401).json({ error: 'Access denied' });
-
-  jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
-    if (err) return res.status(403).json({ error: 'Invalid token' });
-    req.user = user;
-    next();
-  });
+// Helper functions for token tracking
+const getTodayKey = () => {
+  const today = new Date();
+  return `token_usage:${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
 };
 
-const apiRouter = express.Router();
+const getCurrentMonthKey = () => {
+  const today = new Date();
+  return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`;
+};
 
-// Auth routes
-apiRouter.post('/signup', async (req, res) => {
-  const { email, password } = req.body;
-  const hashedPassword = await bcrypt.hash(password, 10);
+const trackDailyTokens = async (tokens) => {
   try {
-    const result = await pool.query('INSERT INTO users (email, password) VALUES ($1, $2) RETURNING id', [email, hashedPassword]);
-    res.status(201).json({ id: result.rows[0].id });
+    const key = getTodayKey();
+    const count = await redisClient.incrBy(key, tokens);
+    // Set expiry to end of day (24 hours)
+    await redisClient.expire(key, 86400);
+    return count;
   } catch (err) {
-    res.status(400).json({ error: 'User already exists' });
+    console.error('Error tracking daily tokens:', err);
+    return 0;
   }
+};
+
+const trackMonthlyTokens = async (tokens) => {
+  try {
+    const monthKey = getCurrentMonthKey();
+    const today = new Date();
+    const result = await pool.query(
+      `INSERT INTO token_usage (month_year, total_tokens, updated_at)
+       VALUES ($1, $2, CURRENT_TIMESTAMP)
+       ON CONFLICT (month_year) DO UPDATE SET
+       total_tokens = token_usage.total_tokens + $2,
+       updated_at = CURRENT_TIMESTAMP`,
+      [monthKey, tokens]
+    );
+    return true;
+  } catch (err) {
+    console.error('Error tracking monthly tokens:', err);
+    return false;
+  }
+};
+
+const checkDailySoftLimit = async () => {
+  try {
+    const key = getTodayKey();
+    const count = parseInt(await redisClient.get(key) || '0', 10);
+    return count >= DAILY_SOFT_LIMIT;
+  } catch (err) {
+    console.error('Error checking daily soft limit:', err);
+    return false;
+  }
+};
+
+const checkMonthlySoftLimit = async () => {
+  try {
+    const monthKey = getCurrentMonthKey();
+    const result = await pool.query(
+      'SELECT total_tokens FROM token_usage WHERE month_year = $1',
+      [monthKey]
+    );
+    if (result.rows.length === 0) return false;
+    return result.rows[0].total_tokens >= MONTHLY_HARD_LIMIT;
+  } catch (err) {
+    console.error('Error checking monthly hard limit:', err);
+    return false;
+  }
+};
+
+const getDailyTokenUsage = async () => {
+  try {
+    const key = getTodayKey();
+    const count = parseInt(await redisClient.get(key) || '0', 10);
+    return count;
+  } catch (err) {
+    console.error('Error getting daily token usage:', err);
+    return 0;
+  }
+};
+
+const getMonthlyTokenUsage = async () => {
+  try {
+    const monthKey = getCurrentMonthKey();
+    const result = await pool.query(
+      'SELECT total_tokens FROM token_usage WHERE month_year = $1',
+      [monthKey]
+    );
+    if (result.rows.length === 0) return 0;
+    return result.rows[0].total_tokens;
+  } catch (err) {
+    console.error('Error getting monthly token usage:', err);
+    return 0;
+  }
+};
+
+const accessibleTables = [
+  "contacts",
+  "payments"
+];
+
+const schemaFiles = {
+  "01-contacts.sql": '', 
+  "02-payments.sql": ''
+};
+
+// read schema files
+for (const file of Object.keys(schemaFiles)) {
+  const content = fs.readFileSync(`${__dirname}/sql/${file}`, 'utf-8');
+  schemaFiles[file] = content;
+}
+
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok' });
 });
 
-apiRouter.post('/signin', async (req, res) => {
-  const { email, password } = req.body;
-  const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
-  if (result.rows.length === 0) return res.status(400).json({ error: 'User not found' });
+app.post('/api/query', async (req, res) => {
+  const { prompt = '' } = req.body;
+  
+  // Extract or generate user ID from cookies
+  const cookies = parseCookies(req.headers.cookie);
+  let userId = cookies.userId;
+  if (!userId) {
+    userId = generateUserId();
+    // Set cookie in response (expires in 1 year)
+    const date = new Date();
+    date.setFullYear(date.getFullYear() + 1);
+    res.set('Set-Cookie', `userId=${encodeURIComponent(userId)}; expires=${date.toUTCString()}; path=/; HttpOnly`);
+  }
 
-  const validPassword = await bcrypt.compare(password, result.rows[0].password);
-  if (!validPassword) return res.status(400).json({ error: 'Invalid password' });
-
-  const token = jwt.sign({ id: result.rows[0].id }, process.env.JWT_SECRET);
-  res.json({ token });
-});
-
-// Contacts CRUD
-apiRouter.get('/contacts', authenticateToken, async (req, res) => {
-  const result = await pool.query('SELECT * FROM contacts WHERE user_id = $1', [req.user.id]);
-  res.json(result.rows);
-});
-
-apiRouter.post('/contacts', authenticateToken, async (req, res) => {
-  const { name, email, phone } = req.body;
-  const result = await pool.query('INSERT INTO contacts (user_id, name, email, phone) VALUES ($1, $2, $3, $4) RETURNING *', [req.user.id, name, email, phone]);
-  res.status(201).json(result.rows[0]);
-});
-
-apiRouter.put('/contacts/:id', authenticateToken, async (req, res) => {
-  const { name, email, phone } = req.body;
-  const result = await pool.query('UPDATE contacts SET name = $1, email = $2, phone = $3 WHERE id = $4 AND user_id = $5 RETURNING *', [name, email, phone, req.params.id, req.user.id]);
-  if (result.rows.length === 0) return res.status(404).json({ error: 'Contact not found' });
-  res.json(result.rows[0]);
-});
-
-apiRouter.delete('/contacts/:id', authenticateToken, async (req, res) => {
-  const result = await pool.query('DELETE FROM contacts WHERE id = $1 AND user_id = $2', [req.params.id, req.user.id]);
-  if (result.rowCount === 0) return res.status(404).json({ error: 'Contact not found' });
-  res.status(204).send();
-});
-
-// Subscriptions
-apiRouter.post('/create-checkout-session', authenticateToken, async (req, res) => {
-  const { plan } = req.body;
-  const price = plan === 'basic' ? 1000 : 2000; // in cents
-
-  const session = await stripe.checkout.sessions.create({
-    payment_method_types: ['card'],
-    line_items: [{
-      price_data: {
-        currency: 'usd',
-        product_data: {
-          name: `${plan} Plan`,
-        },
-        unit_amount: price,
+  if (!prompt.trim()) {
+    const dailyUsage = await getDailyTokenUsage();
+    const monthlyUsage = await getMonthlyTokenUsage();
+    return res.json({
+      query: '',
+      columns: [],
+      rows: [],
+      tokensUsed: 0,
+      tokenUsage: {
+        daily: { used: dailyUsage, limit: DAILY_SOFT_LIMIT },
+        monthly: { used: monthlyUsage, limit: MONTHLY_HARD_LIMIT },
       },
-      quantity: 1,
-    }],
-    mode: 'payment',
-    success_url: 'http://localhost/success?session_id={CHECKOUT_SESSION_ID}',
-    cancel_url: 'http://localhost/subscriptions',
-    metadata: {
-      userId: req.user.id,
-      plan,
+    });
+  }
+
+  // Check daily soft limit
+  const dailyLimitExceeded = await checkDailySoftLimit();
+  if (dailyLimitExceeded) {
+    const dailyUsage = await getDailyTokenUsage();
+    const monthlyUsage = await getMonthlyTokenUsage();
+    return res.status(429).json({
+      success: false,
+      message: 'Daily token limit (100k) exceeded. Please try again tomorrow.',
+      query: '',
+      columns: [],
+      rows: [],
+      tokenUsage: {
+        daily: { used: dailyUsage, limit: DAILY_SOFT_LIMIT },
+        monthly: { used: monthlyUsage, limit: MONTHLY_HARD_LIMIT },
+      },
+    });
+  }
+
+  // Check monthly hard limit
+  const monthlyLimitExceeded = await checkMonthlySoftLimit();
+  if (monthlyLimitExceeded) {
+    const dailyUsage = await getDailyTokenUsage();
+    const monthlyUsage = await getMonthlyTokenUsage();
+    return res.status(429).json({
+      success: false,
+      message: 'Monthly token limit (1M) exceeded. Service is unavailable.',
+      query: '',
+      columns: [],
+      rows: [],
+      tokenUsage: {
+        daily: { used: dailyUsage, limit: DAILY_SOFT_LIMIT },
+        monthly: { used: monthlyUsage, limit: MONTHLY_HARD_LIMIT },
+      },
+    });
+  }
+
+  const fullSchema = Object.values(schemaFiles).join('\n');
+
+  const response = await fetch('https://inference.do-ai.run/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${process.env.GPT_API_KEY}`,
     },
+    body: JSON.stringify({
+      model: 'openai-gpt-4o-mini',
+      user: userId,
+      messages: [
+        { role: 'system', content: 'You are a SQL expert. Database schema:\n\n' + fullSchema },
+        { role: 'user', content: `Respond only in valid SQL without any additional text. Convert the following request into a SQL query: "${prompt}."` },
+      ],
+      max_completion_tokens: 1000,
+    }),
   });
 
-  res.json({ url: session.url });
-});
+  const data = await response.json();
 
-// Verify payment
-apiRouter.post('/verify-payment', authenticateToken, async (req, res) => {
-  const { sessionId } = req.body;
-  const session = await stripe.checkout.sessions.retrieve(sessionId);
-  if (session.payment_status === 'paid') {
-    if (!channel) {
-      return res.status(503).json({ error: 'Payment queue is not available yet' });
-    }
+  // Extract token usage from LLM response
+  const tokensUsed = (data.usage?.total_tokens || 0) + (data.usage?.prompt_tokens || 0) + (data.usage?.completion_tokens || 0);
+  const promptTokens = data.usage?.prompt_tokens || 0;
+  const completionTokens = data.usage?.completion_tokens || 0;
+  const totalTokens = data.usage?.total_tokens || (promptTokens + completionTokens);
 
-    const { userId, plan } = session.metadata;
-    const amount = plan === 'basic' ? 10.0 : 20.0;
-    // Send to queue
-    channel.sendToQueue('payment_queue', Buffer.from(JSON.stringify({ userId, plan, amount })));
-    res.json({ success: true });
-  } else {
-    res.status(400).json({ error: 'Payment not completed' });
+  // Track tokens for both daily and monthly limits
+  if (totalTokens > 0) {
+    await trackDailyTokens(totalTokens);
+    await trackMonthlyTokens(totalTokens);
+  }
+
+  // Get updated token usage
+  const dailyUsage = await getDailyTokenUsage();
+  const monthlyUsage = await getMonthlyTokenUsage();
+
+  const generatedSql = (data.choices?.[0]?.message?.content || '').trim();
+  const safeSql = generatedSql.match(/\n(.*)\n/)?.[1] || generatedSql;
+  const normalizedSql = safeSql.toLowerCase();
+
+  const blacklist = /(insert|update|delete|drop|alter|truncate|create|merge|exec|replace|grant|revoke|set\s+session|call|attach|detach)/;
+  const tableRegex = new RegExp(`\\b(${accessibleTables.join('|')})\\b`, 'i');
+
+  if (!normalizedSql.startsWith('select') || blacklist.test(normalizedSql) || !tableRegex.test(normalizedSql)) {
+    return res.status(400).json({
+      query: generatedSql,
+      columns: [],
+      rows: [],
+      tokensUsed: totalTokens,
+      tokenUsage: {
+        daily: { used: dailyUsage, limit: DAILY_SOFT_LIMIT },
+        monthly: { used: monthlyUsage, limit: MONTHLY_HARD_LIMIT },
+      },
+    });
+  }
+
+  try {
+    const result = await pool.query(safeSql);
+    return res.json({
+      query: generatedSql,
+      normalizedSql: normalizedSql,
+      columns: result.fields.map((field) => field.name),
+      rows: result.rows,
+      tokensUsed: totalTokens,
+      tokenUsage: {
+        daily: { used: dailyUsage, limit: DAILY_SOFT_LIMIT },
+        monthly: { used: monthlyUsage, limit: MONTHLY_HARD_LIMIT },
+      },
+    });
+  } catch (err) {
+    console.error('SQL execution error', err);
+    return res.status(400).json({
+      query: generatedSql,
+      columns: [],
+      rows: [],
+      tokensUsed: totalTokens,
+      tokenUsage: {
+        daily: { used: dailyUsage, limit: DAILY_SOFT_LIMIT },
+        monthly: { used: monthlyUsage, limit: MONTHLY_HARD_LIMIT },
+      },
+    });
   }
 });
 
-// Payment history
-apiRouter.get('/payments', authenticateToken, async (req, res) => {
-  const result = await pool.query('SELECT * FROM payments WHERE user_id = $1', [req.user.id]);
-  res.json(result.rows);
-});
+app.post('/api/auth', async (req, res) => {
+  const { username, password } = req.body;
 
-// Professional details (static for landing page)
-apiRouter.get('/professional', (req, res) => {
-  res.json({
-    name: 'Kelvin Joaquin',
-    title: 'Backend Developer',
-    bio: 'Passionate backend developer specializing in scalable systems and modern technologies.',
-    skills: ['Node.js', 'Python', 'PostgreSQL', 'Docker', 'RabbitMQ', 'Express', 'FastAPI'],
-    workExperience: [
-      { title: 'Senior Backend Developer', company: 'Tech Corp', duration: '2020 - Present', description: 'Led development of microservices architecture.' },
-      { title: 'Backend Engineer', company: 'Startup Inc', duration: '2018 - 2020', description: 'Built RESTful APIs and database solutions.' }
-    ],
-    contact: {
-      email: 'kelvin.joaquin@example.com',
-      phone: '+1 (123) 456-7890',
-      linkedin: 'linkedin.com/in/kelvinjoaquin'
+  if (!username || !password) {
+    return res.status(400).json({ success: false, message: 'Username and password are required.' });
+  }
+
+  try {
+    const result = await pool.query('SELECT * FROM users WHERE email = $1 LIMIT 1', [username]);
+    const user = result.rows[0];
+
+    if (!user) {
+      return res.status(401).json({ success: false, message: 'Invalid credentials.' });
     }
-  });
+
+    let passwordMatches = false;
+    if (typeof user.password === 'string' && user.password.startsWith('$2')) {
+      passwordMatches = await bcrypt.compare(password, user.password);
+    } else {
+      passwordMatches = password === user.password;
+    }
+
+    if (!passwordMatches) {
+      return res.status(401).json({ success: false, message: 'Invalid credentials.' });
+    }
+
+    return res.json({ success: true, message: `Authenticated ${username}.` });
+  } catch (err) {
+    console.error('Auth error', err);
+    return res.status(500).json({ success: false, message: 'Unable to authenticate right now.' });
+  }
 });
 
-app.use('/api', apiRouter);
+app.get('/api/plans', async (req, res) => {
+  if (!process.env.STRIPE_SECRET_KEY) {
+    return res.status(500).json({ success: false, message: 'Stripe is not configured.' });
+  }
+
+  try {
+    const prices = await stripe.prices.list({
+      active: true,
+      expand: ['data.product'],
+      limit: 100,
+    });
+
+    const planData = prices.data.map((price) => {
+      const interval = price.recurring?.interval || 'one_time';
+      const displayAmount = new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: price.currency || 'usd',
+      }).format((price.unit_amount || 0) / 100);
+
+      return {
+        id: price.id,
+        nickname: price.nickname || price.product?.name || `Plan ${price.id}`,
+        productName: price.product?.name || null,
+        interval,
+        intervalLabel: interval === 'year' ? 'annually' : 'monthly',
+        amount: price.unit_amount || 0,
+        currency: price.currency || 'usd',
+        displayAmount,
+      };
+    });
+
+    const categorized = {
+      monthly: planData.filter((plan) => plan.interval === 'month'),
+      annually: planData.filter((plan) => plan.interval === 'year'),
+    };
+
+    if (!categorized.monthly.length && !categorized.annually.length) {
+      return res.json({
+        plans: {
+          monthly: [
+            { id: 'plan_monthly_basic', nickname: 'Basic Monthly', interval: 'month', intervalLabel: 'monthly', amount: 9900, currency: 'usd', displayAmount: '$99.00' },
+            { id: 'plan_monthly_pro', nickname: 'Pro Monthly', interval: 'month', intervalLabel: 'monthly', amount: 4900, currency: 'usd', displayAmount: '$49.00' },
+          ],
+          annually: [
+            { id: 'plan_annual_pro', nickname: 'Pro Annual', interval: 'year', intervalLabel: 'annually', amount: 49900, currency: 'usd', displayAmount: '$499.00' },
+          ],
+        },
+      });
+    }
+
+    return res.json({ plans: categorized });
+  } catch (err) {
+    console.error('Plans error', err);
+    return res.status(500).json({ success: false, message: 'Unable to fetch plans.' });
+  }
+});
+
+app.post('/api/subscribe', async (req, res) => {
+  const { token, planPriceId, email } = req.body;
+
+  if (!token) {
+    return res.status(400).json({ success: false, message: 'Stripe token is required.' });
+  }
+
+  if (!planPriceId) {
+    return res.status(400).json({ success: false, message: 'A plan price is required.' });
+  }
+
+  if (!email) {
+    return res.status(400).json({ success: false, message: 'Customer email is required.' });
+  }
+
+  try {
+    const customer = await stripe.customers.create({
+      email,
+      source: token,
+    });
+
+    const subscription = await stripe.subscriptions.create({
+      customer: customer.id,
+      items: [{ price: planPriceId }],
+      expand: ['items.data.price.product'],
+    });
+
+    const planItem = subscription.items.data[0];
+    const planName = planItem.price.nickname || planItem.price.product?.name || planItem.price.id;
+
+    return res.json({
+      success: true,
+      message: `Subscription created for ${email} on ${planName}.`,
+      subscriptionId: subscription.id,
+      plan: planName,
+      status: subscription.status,
+    });
+  } catch (err) {
+    console.error('Subscription error', err);
+    return res.status(500).json({ success: false, message: 'Unable to create subscription.' });
+  }
+});
 
 app.listen(3001, '0.0.0.0', () => console.log('Backend running on port 3001'));
