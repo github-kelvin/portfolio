@@ -7,9 +7,20 @@ const bcrypt = require('bcryptjs');
 require('dotenv').config();
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
+const allowedOrigins = (process.env.FRONTEND_ORIGIN || 'http://localhost')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
 const app = express();
 app.use(cors({
-  origin: true,
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true,
 }));
 app.use(express.json());
@@ -32,6 +43,7 @@ const generateUserId = () => {
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
+  statement_timeout: 5000,
 });
 
 const redisClient = createClient({
@@ -265,10 +277,21 @@ app.post('/api/query', async (req, res) => {
   const safeSql = generatedSql.match(/\n(.*)\n/)?.[1] || generatedSql;
   const normalizedSql = safeSql.toLowerCase();
 
+  // App-level defense-in-depth only; this is not a substitute for a DB-level
+  // read-only role restricted to accessibleTables, which would be the real
+  // security boundary here.
   const blacklist = /(insert|update|delete|drop|alter|truncate|create|merge|exec|replace|grant|revoke|set\s+session|call|attach|detach)/;
+  const statementChainOrComment = /;|--|\/\*/;
+  const forbiddenTableRegex = /\busers\b/i;
   const tableRegex = new RegExp(`\\b(${accessibleTables.join('|')})\\b`, 'i');
 
-  if (!normalizedSql.startsWith('select') || blacklist.test(normalizedSql) || !tableRegex.test(normalizedSql)) {
+  if (
+    !normalizedSql.startsWith('select') ||
+    blacklist.test(normalizedSql) ||
+    statementChainOrComment.test(normalizedSql) ||
+    forbiddenTableRegex.test(normalizedSql) ||
+    !tableRegex.test(normalizedSql)
+  ) {
     return res.status(400).json({
       query: generatedSql,
       columns: [],
@@ -324,12 +347,9 @@ app.post('/api/auth', async (req, res) => {
       return res.status(401).json({ success: false, message: 'Invalid credentials.' });
     }
 
-    let passwordMatches = false;
-    if (typeof user.password === 'string' && user.password.startsWith('$2')) {
-      passwordMatches = await bcrypt.compare(password, user.password);
-    } else {
-      passwordMatches = password === user.password;
-    }
+    const passwordMatches = typeof user.password === 'string' && user.password.startsWith('$2')
+      ? await bcrypt.compare(password, user.password)
+      : false;
 
     if (!passwordMatches) {
       return res.status(401).json({ success: false, message: 'Invalid credentials.' });

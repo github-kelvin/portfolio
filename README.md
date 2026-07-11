@@ -5,10 +5,9 @@ A full-stack web application with React frontend, Node.js backend API, worker se
 ## Features
 
 - Landing page with professional details
-- User authentication (signup/signin)
-- Dashboard with contact CRUD
-- Subscription purchase via Stripe Checkout
-- Payment history
+- Natural-language-to-SQL demo querying a Postgres database
+- Basic login check against a users table
+- Subscription plans and signup via Stripe
 
 ## Deployment
 
@@ -77,13 +76,8 @@ The workflow will:
 
 ## API Endpoints
 
-- POST /api/signup
-- POST /api/signin
-- GET /api/contacts
-- POST /api/contacts
-- PUT /api/contacts/:id
-- DELETE /api/contacts/:id
-- POST /api/create-checkout-session
-- POST /api/verify-payment
-- GET /api/payments
-- GET /api/professional
+- GET /api/health
+- POST /api/query — natural-language-to-SQL demo (read-only, restricted to `contacts`/`payments`)
+- POST /api/auth — login check against the `users` table
+- GET /api/plans — available Stripe subscription plans
+- POST /api/subscribe — create a Stripe customer and subscription

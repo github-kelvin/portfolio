@@ -14,7 +14,9 @@ async function startWorker() {
   console.log('Worker waiting for messages...');
 
   channel.consume('payment_queue', async (msg) => {
-    if (msg !== null) {
+    if (msg === null) return;
+
+    try {
       const { userId, plan, amount } = JSON.parse(msg.content.toString());
       console.log(`Processing payment for user ${userId}, plan ${plan}, amount ${amount}`);
 
@@ -26,6 +28,9 @@ async function startWorker() {
 
       channel.ack(msg);
       console.log('Payment processed');
+    } catch (err) {
+      console.error('Error processing payment message:', err);
+      channel.nack(msg, false, false);
     }
   });
 }
