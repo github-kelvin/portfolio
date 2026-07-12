@@ -11,45 +11,62 @@ A full-stack web application with React frontend, Node.js backend API, worker se
 
 ## Deployment
 
-### Manual Deployment via GitHub Actions
+### Manual Deployment via GitHub Actions (DigitalOcean Kubernetes)
 
-The application can be deployed manually to a remote server using GitHub Actions.
+The application deploys to a DigitalOcean Kubernetes (DOKS) cluster in the
+`portfolio` namespace. Images are built in CI, pushed to DigitalOcean
+Container Registry (DOCR), and rolled out with `kubectl`. No SSH access to
+any server is required.
 
-#### Setup
+#### Prerequisites (one-time)
 
-1. **Server Requirements**: Ensure your deployment server has:
-   - Docker and Docker Compose installed
-   - SSH access configured
-   - Git repository cloned at `/path/to/your/app`
+- A DOKS cluster, a DOCR registry, and a DO Managed Postgres database
+- The one-time cluster setup in [docs/k8s-setup.md](docs/k8s-setup.md)
+  (ingress-nginx, cert-manager, DNS, database firewall)
+- Kubernetes manifests live in `k8s/`
 
-2. **GitHub Secrets Configuration**:
-   Add the following secrets to your GitHub repository:
-   - `SSH_PRIVATE_KEY`: Private SSH key for server access
-   - `SSH_KNOWN_HOSTS`: SSH known hosts entry for the server
-   - `SSH_USER`: SSH username for the server
-   - `SSH_HOST`: Server hostname or IP address
+#### GitHub Configuration
 
-3. **Environment Variables**:
-   Ensure your `.env` file is present on the server with all required environment variables.
+Repository **variables** (Settings → Secrets and variables → Actions → Variables):
+
+| Variable | Purpose | Example |
+|---|---|---|
+| `DOCR_REGISTRY` | DOCR registry name | `my-registry` |
+| `CLUSTER_NAME` | DOKS cluster name | `portfolio-cluster` |
+| `FRONTEND_ORIGIN` | Public origin of the frontend (CORS). Must be the EXACT origin — scheme + domain, no trailing slash — or every browser API call fails CORS | `https://example.com` |
+
+Repository **secrets**:
+
+| Secret | Purpose |
+|---|---|
+| `DIGITALOCEAN_ACCESS_TOKEN` | DO API token with registry + kubernetes scopes |
+| `DATABASE_URL` | Managed Postgres URI, must end `?sslmode=no-verify` |
+| `REDIS_URL` | `redis://redis:6379` |
+| `RABBITMQ_URL` | `amqp://<user>:<pass>@rabbitmq:5672` |
+| `RABBITMQ_DEFAULT_USER` | RabbitMQ username |
+| `RABBITMQ_DEFAULT_PASS` | RabbitMQ password |
+| `STRIPE_PUBLISHABLE_KEY` | Stripe publishable key (also baked into frontend build) |
+| `STRIPE_SECRET_KEY` | Stripe secret key |
+| `GPT_API_KEY` | LLM inference API key |
+
+The old `SSH_PRIVATE_KEY`, `SSH_KNOWN_HOSTS`, `SSH_USER`, `SSH_HOST`, and
+`ENV_FILE` secrets are no longer used — delete them.
 
 #### Deployment Process
 
-1. Go to the **Actions** tab in your GitHub repository
-2. Select **Deploy Services** workflow
-3. Click **Run workflow**
-4. Choose the environment (production/staging)
-5. Click **Run workflow**
+1. Go to the **Actions** tab → **Deploy to DOKS** → **Run workflow**
 
-The workflow will:
-- Connect to your server via SSH
-- Pull the latest code changes
-- Rebuild and restart all services with Docker Compose
-- Display deployment logs
+The workflow builds and pushes all three images (tagged with the commit SHA),
+refreshes the registry pull secret and app Secret/ConfigMap, applies `k8s/`,
+waits for the `db-init` job, rolls the deployments to the new tag, and waits
+for rollout completion.
 
 #### Data Persistence
 
-- **PostgreSQL**: Data persists in the `postgres_data` Docker volume
-- **Redis**: Data persists in the `redis_data` Docker volume with append-only file
+- **PostgreSQL**: DO Managed Postgres (automated backups, external to cluster)
+- **Redis / RabbitMQ**: ephemeral (emptyDir) — data does not survive pod
+  restarts. Redis holds only self-expiring daily token counters; the monthly
+  hard limit lives in Postgres.
 
 ### Local Development
 
@@ -70,9 +87,9 @@ The workflow will:
 - **Frontend**: React app with Vite, served via Nginx
 - **Backend**: Node.js Express API with Stripe
 - **Worker**: Processes payment messages from RabbitMQ
-- **PostgreSQL**: Database
+- **PostgreSQL**: DO Managed Postgres (production) / container (local dev)
 - **RabbitMQ**: Message queue
-- **Nginx**: Reverse proxy routing requests
+- **Nginx**: ingress-nginx (production) / Nginx container (local dev)
 
 ## API Endpoints
 
