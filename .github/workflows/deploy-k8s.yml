@@ -67,6 +67,12 @@ jobs:
       - name: Ensure DOCR pull secret and attach to default ServiceAccount
         run: |
           doctl registry kubernetes-manifest --namespace "$NAMESPACE" | kubectl apply -f -
+          # The default ServiceAccount is created asynchronously in a brand-new
+          # namespace; wait for it before patching.
+          for _ in $(seq 1 30); do
+            kubectl get serviceaccount default -n "$NAMESPACE" >/dev/null 2>&1 && break
+            sleep 2
+          done
           kubectl patch serviceaccount default -n "$NAMESPACE" \
             -p '{"imagePullSecrets":[{"name":"registry-${{ vars.DOCR_REGISTRY }}"}]}'
 
