@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: worker
+  namespace: portfolio
+  labels:
+    app.kubernetes.io/name: worker
+    app.kubernetes.io/part-of: portfolio
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: worker
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: worker
+        app.kubernetes.io/part-of: portfolio
+    spec:
+      containers:
+        - name: worker
+          image: registry.digitalocean.com/DOCR_REGISTRY_PLACEHOLDER/portfolio-worker:latest
+          envFrom:
+            - secretRef:
+                name: portfolio-secrets
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 192Mi
