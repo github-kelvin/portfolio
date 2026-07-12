@@ -1,5 +1,10 @@
 # One-Time DOKS Cluster Setup
 
+> **Automated:** `scripts/bootstrap-deploy.sh` performs everything below —
+> plus GitHub variables/secrets provisioning and the first workflow dispatch —
+> idempotently. The steps here document what it does and serve as the manual
+> fallback / troubleshooting reference.
+
 Run these once, in order, before the first "Deploy to DOKS" workflow run.
 Prereqs: `doctl` authenticated (`doctl auth init`), kubeconfig saved
 (`doctl kubernetes cluster kubeconfig save <CLUSTER_NAME>`).

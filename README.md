@@ -51,6 +51,13 @@ The old `SSH_PRIVATE_KEY`, `SSH_KNOWN_HOSTS`, `SSH_USER`, `SSH_HOST`,
 `ENV_FILE`, `STRIPE_PUBLISHABLE_KEY`, and `STRIPE_SECRET_KEY` secrets are no
 longer used — delete them.
 
+#### Bootstrap (first-time, automated)
+
+`scripts/bootstrap-deploy.sh` provisions everything end-to-end: GitHub
+variables/secrets (derived via `doctl`/`gh`), ingress-nginx + cert-manager
+installs, the DNS A record, the database firewall, and the first workflow
+dispatch. Idempotent — safe to re-run.
+
 #### Deployment Process
 
 1. Go to the **Actions** tab → **Deploy to DOKS** → **Run workflow**
