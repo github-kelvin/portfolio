@@ -11,10 +11,10 @@ spec:
   ingressClassName: nginx
   tls:
     - hosts:
-        - portfolio.example.com
+        - crvn.online
       secretName: portfolio-tls
   rules:
-    - host: portfolio.example.com
+    - host: crvn.online
       http:
         paths:
           - path: /api

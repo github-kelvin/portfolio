@@ -19,7 +19,7 @@ spec:
     spec:
       containers:
         - name: backend
-          image: registry.digitalocean.com/DOCR_REGISTRY_PLACEHOLDER/portfolio-backend:latest
+          image: registry.digitalocean.com/bloomgate/portfolio-backend:latest
           ports:
             - name: http
               containerPort: 3001

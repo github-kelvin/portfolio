@@ -44,7 +44,7 @@ kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="ExternalIP
 
 Create an apex A record → the node public IP from step 1 (TTL 300).
 DigitalOcean DNS: `doctl compute domain records create <domain> --record-type A --record-name @ --record-data <NODE_IP> --record-ttl 300`
-Verify before proceeding: `dig +short portfolio.example.com A` → node IP (also via `@1.1.1.1`).
+Verify before proceeding: `dig +short crvn.online A` → node IP (also via `@1.1.1.1`).
 
 **CAVEAT — ephemeral node IP:** DOKS node public IPs change when a node is
 recycled or the pool is upgraded. Keep cluster **auto-upgrade OFF** (Control
