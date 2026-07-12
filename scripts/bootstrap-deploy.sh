@@ -147,6 +147,20 @@ else
 fi
 kubectl -n ingress-nginx rollout status deployment/ingress-nginx-controller --timeout=180s
 
+# ingress-nginx >=1.12 strict path validation rejects the pathType:Exact ACME
+# solver ingress cert-manager creates; relax it or HTTP-01 challenges never
+# present.
+strict=$(kubectl -n ingress-nginx get configmap ingress-nginx-controller \
+  -o jsonpath='{.data.strict-validate-path-type}' 2>/dev/null || true)
+if [ "$strict" != "false" ]; then
+  kubectl -n ingress-nginx patch configmap ingress-nginx-controller --type merge \
+    -p '{"data":{"strict-validate-path-type":"false"}}'
+  kubectl -n ingress-nginx rollout restart deployment/ingress-nginx-controller
+  kubectl -n ingress-nginx rollout status deployment/ingress-nginx-controller --timeout=120s
+else
+  skip "strict-validate-path-type already disabled"
+fi
+
 say "Installing cert-manager"
 kubectl apply -f "$CERT_MANAGER_MANIFEST"
 kubectl wait --namespace cert-manager --for=condition=Available deployment \

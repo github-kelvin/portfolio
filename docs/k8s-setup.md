@@ -38,6 +38,12 @@ kubectl -n ingress-nginx rollout status deployment/ingress-nginx-controller --ti
 
 # Node public IP (this is what DNS will point at):
 kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="ExternalIP")].address}'
+
+# ingress-nginx >=1.12 strict path validation rejects cert-manager's ACME
+# solver ingress (pathType Exact); relax it or HTTP-01 never presents:
+kubectl -n ingress-nginx patch configmap ingress-nginx-controller --type merge \
+  -p '{"data":{"strict-validate-path-type":"false"}}'
+kubectl -n ingress-nginx rollout restart deployment/ingress-nginx-controller
 ```
 
 ## 2. DNS (node IP — read the caveat)
