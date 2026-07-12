@@ -69,11 +69,17 @@ fi
 
 # ------------------------------------------- placeholder substitution (once)
 say "Placeholder substitution in k8s/ and docs/"
-if grep -rlq 'portfolio\.example\.com\|DOCR_REGISTRY_PLACEHOLDER' k8s/ docs/k8s-setup.md 2>/dev/null; then
+# Check k8s/ only: docs/k8s-setup.md keeps the placeholder strings forever in
+# its example commands, which must not retrigger this branch.
+if grep -rlq 'portfolio\.example\.com\|DOCR_REGISTRY_PLACEHOLDER' k8s/ 2>/dev/null; then
   sed -i '' "s/portfolio\.example\.com/${DOMAIN}/g" k8s/ingress.yaml docs/k8s-setup.md
   sed -i '' "s/DOCR_REGISTRY_PLACEHOLDER/${REGISTRY_NAME}/g" k8s/*.yaml
   git add k8s/ docs/k8s-setup.md
-  git commit -m "chore: set real domain and registry in k8s manifests"
+  if git diff --cached --quiet; then
+    skip "substitution produced no changes"
+  else
+    git commit -m "chore: set real domain and registry in k8s manifests"
+  fi
 else
   skip "placeholders already substituted"
 fi
