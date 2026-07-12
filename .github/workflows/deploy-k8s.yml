@@ -48,11 +48,8 @@ jobs:
           docker push "$REGISTRY/portfolio-worker:latest"
 
       - name: Build and push frontend image
-        env:
-          VITE_STRIPE_PUBLISHABLE_KEY: ${{ secrets.STRIPE_PUBLISHABLE_KEY }}
         run: |
           docker build \
-            --build-arg VITE_STRIPE_PUBLISHABLE_KEY="$VITE_STRIPE_PUBLISHABLE_KEY" \
             -t "$REGISTRY/portfolio-frontend:${{ github.sha }}" \
             -t "$REGISTRY/portfolio-frontend:latest" \
             ./frontend
@@ -80,8 +77,6 @@ jobs:
           RABBITMQ_URL: ${{ secrets.RABBITMQ_URL }}
           RABBITMQ_DEFAULT_USER: ${{ secrets.RABBITMQ_DEFAULT_USER }}
           RABBITMQ_DEFAULT_PASS: ${{ secrets.RABBITMQ_DEFAULT_PASS }}
-          STRIPE_PUBLISHABLE_KEY: ${{ secrets.STRIPE_PUBLISHABLE_KEY }}
-          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
           GPT_API_KEY: ${{ secrets.GPT_API_KEY }}
         run: |
           kubectl create secret generic portfolio-secrets \
@@ -91,8 +86,6 @@ jobs:
             --from-literal=RABBITMQ_URL="$RABBITMQ_URL" \
             --from-literal=RABBITMQ_DEFAULT_USER="$RABBITMQ_DEFAULT_USER" \
             --from-literal=RABBITMQ_DEFAULT_PASS="$RABBITMQ_DEFAULT_PASS" \
-            --from-literal=STRIPE_PUBLISHABLE_KEY="$STRIPE_PUBLISHABLE_KEY" \
-            --from-literal=STRIPE_SECRET_KEY="$STRIPE_SECRET_KEY" \
             --from-literal=GPT_API_KEY="$GPT_API_KEY" \
             --dry-run=client -o yaml | kubectl apply -f -
 

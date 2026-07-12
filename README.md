@@ -7,7 +7,7 @@ A full-stack web application with React frontend, Node.js backend API, worker se
 - Landing page with professional details
 - Natural-language-to-SQL demo querying a Postgres database
 - Basic login check against a users table
-- Subscription plans and signup via Stripe
+- Subscription plans and signup via Stripe (currently disabled)
 
 ## Deployment
 
@@ -45,12 +45,11 @@ Repository **secrets**:
 | `RABBITMQ_URL` | `amqp://<user>:<pass>@rabbitmq:5672` |
 | `RABBITMQ_DEFAULT_USER` | RabbitMQ username |
 | `RABBITMQ_DEFAULT_PASS` | RabbitMQ password |
-| `STRIPE_PUBLISHABLE_KEY` | Stripe publishable key (also baked into frontend build) |
-| `STRIPE_SECRET_KEY` | Stripe secret key |
-| `GPT_API_KEY` | LLM inference API key |
+| `GPT_API_KEY` | LLM inference API key (DO Gradient serverless inference) |
 
-The old `SSH_PRIVATE_KEY`, `SSH_KNOWN_HOSTS`, `SSH_USER`, `SSH_HOST`, and
-`ENV_FILE` secrets are no longer used — delete them.
+The old `SSH_PRIVATE_KEY`, `SSH_KNOWN_HOSTS`, `SSH_USER`, `SSH_HOST`,
+`ENV_FILE`, `STRIPE_PUBLISHABLE_KEY`, and `STRIPE_SECRET_KEY` secrets are no
+longer used — delete them.
 
 #### Deployment Process
 
@@ -96,5 +95,5 @@ for rollout completion.
 - GET /api/health
 - POST /api/query — natural-language-to-SQL demo (read-only, restricted to `contacts`/`payments`)
 - POST /api/auth — login check against the `users` table
-- GET /api/plans — available Stripe subscription plans
-- POST /api/subscribe — create a Stripe customer and subscription
+- GET /api/plans — available Stripe subscription plans (disabled — payments off, returns 503)
+- POST /api/subscribe — create a Stripe customer and subscription (disabled — payments off, returns 503)

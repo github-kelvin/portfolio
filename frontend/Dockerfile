@@ -1,7 +1,5 @@
 FROM node:18-alpine
 
-ARG VITE_STRIPE_PUBLISHABLE_KEY
-
 WORKDIR /app
 
 COPY package*.json ./

@@ -1,9 +1,5 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { loadStripe } from '@stripe/stripe-js';
-import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
-
-const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || 'pk_test_12345');
 
 function DemoRetrieveCard() {
   const [prompt, setPrompt] = useState('');
@@ -145,176 +141,6 @@ function DemoAuthCard() {
   );
 }
 
-function CheckoutForm() {
-  const stripe = useStripe();
-  const elements = useElements();
-  const [email, setEmail] = useState('');
-  const [plans, setPlans] = useState({ monthly: [], annually: [] });
-  const [billingCycle, setBillingCycle] = useState('monthly');
-  const [selectedPriceId, setSelectedPriceId] = useState('');
-  const [selectedPlanLabel, setSelectedPlanLabel] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState(null);
-
-  useEffect(() => {
-    const loadPlans = async () => {
-      try {
-        const response = await fetch('/api/plans');
-        const data = await response.json();
-        const planGroups = data.plans || { monthly: [], annually: [] };
-        setPlans(planGroups);
-
-        const firstPlan = planGroups.monthly?.[0] || planGroups.annually?.[0];
-        if (firstPlan) {
-          setSelectedPriceId(firstPlan.id);
-          setSelectedPlanLabel(`${firstPlan.nickname} — ${firstPlan.displayAmount}`);
-        }
-      } catch (err) {
-        console.error('Unable to load plans', err);
-      }
-    };
-
-    loadPlans();
-  }, []);
-
-  useEffect(() => {
-    const selectedPlan = (plans[billingCycle] || []).find((plan) => plan.id === selectedPriceId);
-    if (!selectedPlan) {
-      const firstPlan = plans[billingCycle]?.[0];
-      if (firstPlan) {
-        setSelectedPriceId(firstPlan.id);
-        setSelectedPlanLabel(`${firstPlan.nickname} — ${firstPlan.displayAmount}`);
-      }
-    }
-  }, [billingCycle, plans, selectedPriceId]);
-
-  const handleSelectPlan = (plan) => {
-    setSelectedPriceId(plan.id);
-    setSelectedPlanLabel(`${plan.nickname} — ${plan.displayAmount}`);
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!stripe || !elements) return;
-    setMessage(null);
-
-    if (!email.trim()) {
-      setMessage('Please enter an email address.');
-      return;
-    }
-
-    if (!selectedPriceId) {
-      setMessage('Please select a pricing plan.');
-      return;
-    }
-
-    setLoading(true);
-    const cardElement = elements.getElement(CardElement);
-
-    if (!cardElement) {
-      setLoading(false);
-      setMessage('Card element not loaded.');
-      return;
-    }
-
-    const result = await stripe.createToken(cardElement);
-
-    if (result.error) {
-      setLoading(false);
-      setMessage(result.error.message);
-      return;
-    }
-
-    const response = await fetch('/api/subscribe', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        token: result.token.id,
-        planPriceId: selectedPriceId,
-        email,
-      }),
-    });
-
-    const data = await response.json();
-    setLoading(false);
-    setMessage(data.message || 'Subscription completed.');
-  };
-
-  const displayPlans = plans[billingCycle] || [];
-
-  return (
-    <form onSubmit={handleSubmit} className="demo-form demo-stripe">
-      <input
-        type="email"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-        placeholder="Email for Stripe customer"
-        className="demo-input"
-      />
-
-      <div className="billing-toggle">
-        <button
-          type="button"
-          className={billingCycle === 'monthly' ? 'active' : ''}
-          onClick={() => setBillingCycle('monthly')}
-        >
-          Monthly
-        </button>
-        <button
-          type="button"
-          className={billingCycle === 'annually' ? 'active' : ''}
-          onClick={() => setBillingCycle('annually')}
-        >
-          Annually
-        </button>
-      </div>
-
-      <div className="plan-grid">
-        {displayPlans.length ? (
-          displayPlans.map((plan) => (
-            <button
-              type="button"
-              key={plan.id}
-              className={`plan-card ${selectedPriceId === plan.id ? 'selected' : ''}`}
-              onClick={() => handleSelectPlan(plan)}
-            >
-              <div className="plan-card-header">
-                <span className="plan-name">{plan.nickname}</span>
-                <span className="plan-amount">{plan.displayAmount}</span>
-              </div>
-              <div className="plan-card-body">
-                <span className="plan-interval">Billed {plan.intervalLabel}</span>
-                {plan.productName && <span className="plan-product">{plan.productName}</span>}
-              </div>
-            </button>
-          ))
-        ) : (
-          <div className="plan-empty">Loading {billingCycle} plans…</div>
-        )}
-      </div>
-
-      <CardElement options={{ style: { base: { color: '#fff', fontSize: '16px' }, invalid: { color: '#ff6b6b' } } }} />
-      <button type="submit" className="btn btn-primary" disabled={!stripe || loading}>
-        {loading ? 'Processing…' : 'Purchase Subscription'}
-      </button>
-      {selectedPlanLabel && <div className="selected-plan">Selected: {selectedPlanLabel}</div>}
-      {message && <div className="demo-message success">{message}</div>}
-    </form>
-  );
-}
-
-function DemoStripeCard() {
-  return (
-    <div className="demo-card">
-      <p>Use Stripe Elements to enter card details and simulate a subscription purchase.</p>
-      <p className="demo-note">Test card: <strong>4242 4242 4242 4242</strong> · Expiry: any future date · CVC: 123</p>
-      <Elements stripe={stripePromise}>
-        <CheckoutForm />
-      </Elements>
-    </div>
-  );
-}
-
 function Demo() {
   useEffect(() => {
     const handleScroll = () => {
@@ -340,7 +166,6 @@ function Demo() {
           <Link to="/">Home</Link>
           <a href="#process-demos">Retrieve</a>
           <a href="#auth-demo">Auth</a>
-          <a href="#stripe-demo">Subscribe</a>
         </nav>
       </header>
 
@@ -348,8 +173,8 @@ function Demo() {
         <div className="hero-copy">
           <p className="eyebrow">Process Demo</p>
           <h1>Backend workflow demos</h1>
-          <p className="hero-title">Explore retrieval, authentication, and subscription flows in one design-focused page.</p>
-          <p className="hero-description">This demo surface shows how data retrieval, login interactions, and Stripe Elements.</p>
+          <p className="hero-title">Explore retrieval and authentication flows in one design-focused page.</p>
+          <p className="hero-description">This demo surface shows how data retrieval and login interactions come together.</p>
           <div className="hero-actions">
             <Link to="/" className="btn btn-secondary">Back to Home</Link>
           </div>
@@ -377,16 +202,6 @@ function Demo() {
         </div>
         <div className="demo-cards">
           <DemoAuthCard />
-        </div>
-      </section>
-
-      <section id="stripe-demo" className="section experience">
-        <div className="section-title">
-          <span>03</span>
-          <h2>Purchase Subscription</h2>
-        </div>
-        <div className="demo-cards">
-          <DemoStripeCard />
         </div>
       </section>
       */}

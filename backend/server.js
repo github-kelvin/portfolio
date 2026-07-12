@@ -5,7 +5,8 @@ const { Pool } = require('pg');
 const { createClient } = require('redis');
 const bcrypt = require('bcryptjs');
 require('dotenv').config();
-const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+// Payments are currently disabled; stripe is only initialized when a key is configured.
+const stripe = process.env.STRIPE_SECRET_KEY ? require('stripe')(process.env.STRIPE_SECRET_KEY) : null;
 
 const allowedOrigins = (process.env.FRONTEND_ORIGIN || 'http://localhost')
   .split(',')
@@ -363,8 +364,8 @@ app.post('/api/auth', async (req, res) => {
 });
 
 app.get('/api/plans', async (req, res) => {
-  if (!process.env.STRIPE_SECRET_KEY) {
-    return res.status(500).json({ success: false, message: 'Stripe is not configured.' });
+  if (!stripe) {
+    return res.status(503).json({ success: false, message: 'Payments are currently disabled.' });
   }
 
   try {
@@ -420,6 +421,10 @@ app.get('/api/plans', async (req, res) => {
 });
 
 app.post('/api/subscribe', async (req, res) => {
+  if (!stripe) {
+    return res.status(503).json({ success: false, message: 'Payments are currently disabled.' });
+  }
+
   const { token, planPriceId, email } = req.body;
 
   if (!token) {
