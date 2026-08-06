@@ -1,0 +1,18 @@
+name: portfolio-static
+static_sites:
+  - name: web
+    github:
+      repo: github-kelvin/portfolio
+      branch: main
+      deploy_on_push: true
+    source_dir: frontend
+    build_command: npm run build
+    output_dir: dist
+    catchall_document: index.html
+domains:
+  - domain: crvn.online
+    type: PRIMARY
+    zone: crvn.online
+  - domain: www.crvn.online
+    type: ALIAS
+    zone: crvn.online
