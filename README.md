@@ -5,7 +5,9 @@ Platform's static site tier.
 
 ## Features
 
-- Landing page with professional details, skills, experience, and contact links
+- Proof-first landing page: hero, five case-study cards, skills grouped by domain, experience, contact
+- Case-study pages at `/work/<slug>` rendered from structured content in `frontend/src/content/caseStudies.js`
+- Client-side routing (react-router-dom) with SPA fallback via App Platform's `catchall_document`
 
 ## Local Development
 
@@ -15,6 +17,7 @@ npm install
 npm run dev      # dev server with hot reload
 npm run build    # production build into frontend/dist
 npm run preview  # serve the production build locally
+npm test         # content-integrity tests (vitest)
 ```
 
 ## Deployment
@@ -48,7 +51,10 @@ doctl apps update <APP_ID> --spec .do/app.yaml
 
 ```
 frontend/        React + Vite source; `dist/` is the published build output
-  src/pages/     Home page
+  src/content/   Case-study content (data, validated by vitest)
+  src/pages/     Home, CaseStudy, NotFound
+  src/components/  Nav, Footer, CaseStudyCard, diagrams/
+  src/styles/    base / home / case-study stylesheets
 .do/app.yaml     App Platform spec (build, routing, domains)
 ```
 
