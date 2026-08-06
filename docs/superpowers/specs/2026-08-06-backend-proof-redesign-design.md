@@ -43,9 +43,10 @@ Every study follows the same structure:
 
 Case studies live as data, not markup: `src/content/caseStudies.js` exports an
 array of structured objects (slug, title, outcome, context, problem, decisions,
-results, tags, diagram component reference). One shared `CaseStudy.jsx` template
-renders any of them; home cards derive from the same data. Diagrams are small
-hand-authored SVG components in `src/components/diagrams/`.
+results, tags, diagram data). One shared `CaseStudy.jsx` template renders any of
+them; home cards derive from the same data. Diagrams render from per-study
+node/edge data through one generic `FlowDiagram` SVG component in
+`src/components/diagrams/` — hand-authored layout data, shared renderer.
 
 ## Component structure
 
@@ -58,7 +59,7 @@ frontend/src/
   components/
     Nav.jsx, Footer.jsx       # shared across pages
     CaseStudyCard.jsx
-    diagrams/*.jsx            # one SVG per study
+    diagrams/FlowDiagram.jsx  # generic SVG renderer; layout data lives per study
   styles/                     # index.css split: base, home, case-study
 ```
 
