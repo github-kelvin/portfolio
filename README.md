@@ -1,106 +1,61 @@
 # Professional Website
 
-A full-stack web application with React frontend, Node.js backend API, worker service, RabbitMQ, PostgreSQL, and Stripe integration.
+A static portfolio site built with React and Vite, hosted on DigitalOcean App
+Platform's static site tier.
 
 ## Features
 
-- Landing page with professional details
-- Natural-language-to-SQL demo querying a Postgres database
-- Basic login check against a users table
-- Subscription plans and signup via Stripe (currently disabled)
+- Landing page with professional details, skills, experience, and contact links
+
+## Local Development
+
+```bash
+cd frontend
+npm install
+npm run dev      # dev server with hot reload
+npm run build    # production build into frontend/dist
+npm run preview  # serve the production build locally
+```
 
 ## Deployment
 
-### Manual Deployment via GitHub Actions (DigitalOcean Kubernetes)
+The site deploys to DigitalOcean App Platform (app spec: [.do/app.yaml](.do/app.yaml)),
+serving `crvn.online`.
 
-The application deploys to a DigitalOcean Kubernetes (DOKS) cluster in the
-`portfolio` namespace. Images are built in CI, pushed to DigitalOcean
-Container Registry (DOCR), and rolled out with `kubectl`. No SSH access to
-any server is required.
+Pushing to `main` triggers [.github/workflows/deploy-static.yml](.github/workflows/deploy-static.yml),
+which calls `doctl apps create-deployment` — App Platform then clones the repo,
+runs `npm run build` in `frontend/`, and publishes `frontend/dist`. You can also
+run the workflow manually from the **Actions** tab, or deploy directly:
 
-#### Prerequisites (one-time)
+```bash
+doctl apps create-deployment <APP_ID> --wait
+```
 
-- A DOKS cluster, a DOCR registry, and a DO Managed Postgres database
-- The one-time cluster setup in [docs/k8s-setup.md](docs/k8s-setup.md)
-  (ingress-nginx, cert-manager, DNS, database firewall)
-- Kubernetes manifests live in `k8s/`
+### Configuration
 
-#### GitHub Configuration
-
-Repository **variables** (Settings → Secrets and variables → Actions → Variables):
-
-| Variable | Purpose | Example |
+| Name | Kind | Purpose |
 |---|---|---|
-| `DOCR_REGISTRY` | DOCR registry name | `my-registry` |
-| `CLUSTER_NAME` | DOKS cluster name | `portfolio-cluster` |
-| `FRONTEND_ORIGIN` | Public origin of the frontend (CORS). Must be the EXACT origin — scheme + domain, no trailing slash — or every browser API call fails CORS | `https://example.com` |
+| `DIGITALOCEAN_ACCESS_TOKEN` | secret | DO API token used to trigger deployments |
+| `APP_ID` | variable | App Platform application ID |
 
-Repository **secrets**:
+Applying changes to the app spec itself (domains, build settings):
 
-| Secret | Purpose |
-|---|---|
-| `DIGITALOCEAN_ACCESS_TOKEN` | DO API token with registry + kubernetes scopes |
-| `DATABASE_URL` | Managed Postgres URI, must end `?sslmode=no-verify` |
-| `REDIS_URL` | `redis://redis:6379` |
-| `RABBITMQ_URL` | `amqp://<user>:<pass>@rabbitmq:5672` |
-| `RABBITMQ_DEFAULT_USER` | RabbitMQ username |
-| `RABBITMQ_DEFAULT_PASS` | RabbitMQ password |
-| `GPT_API_KEY` | LLM inference API key (DO Gradient serverless inference) |
+```bash
+doctl apps update <APP_ID> --spec .do/app.yaml
+```
 
-The old `SSH_PRIVATE_KEY`, `SSH_KNOWN_HOSTS`, `SSH_USER`, `SSH_HOST`,
-`ENV_FILE`, `STRIPE_PUBLISHABLE_KEY`, and `STRIPE_SECRET_KEY` secrets are no
-longer used — delete them.
+## Project Structure
 
-#### Bootstrap (first-time, automated)
+```
+frontend/        React + Vite source; `dist/` is the published build output
+  src/pages/     Home page
+.do/app.yaml     App Platform spec (build, routing, domains)
+```
 
-`scripts/bootstrap-deploy.sh` provisions everything end-to-end: GitHub
-variables/secrets (derived via `doctl`/`gh`), ingress-nginx + cert-manager
-installs, the DNS A record, the database firewall, and the first workflow
-dispatch. Idempotent — safe to re-run.
+## History
 
-#### Deployment Process
-
-1. Go to the **Actions** tab → **Deploy to DOKS** → **Run workflow**
-
-The workflow builds and pushes all three images (tagged with the commit SHA),
-refreshes the registry pull secret and app Secret/ConfigMap, applies `k8s/`,
-waits for the `db-init` job, rolls the deployments to the new tag, and waits
-for rollout completion.
-
-#### Data Persistence
-
-- **PostgreSQL**: DO Managed Postgres (automated backups, external to cluster)
-- **Redis / RabbitMQ**: ephemeral (emptyDir) — data does not survive pod
-  restarts. Redis holds only self-expiring daily token counters; the monthly
-  hard limit lives in Postgres.
-
-### Local Development
-
-1. Ensure Docker and Docker Compose are installed.
-
-2. Clone the repository.
-
-3. Run `docker compose up --build` to start all services.
-
-4. Access the app at http://localhost
-
-5. Backend API at http://localhost/api
-
-6. RabbitMQ management at http://localhost:15672 (user: user, pass: password)
-
-## Services
-
-- **Frontend**: React app with Vite, served via Nginx
-- **Backend**: Node.js Express API with Stripe
-- **Worker**: Processes payment messages from RabbitMQ
-- **PostgreSQL**: DO Managed Postgres (production) / container (local dev)
-- **RabbitMQ**: Message queue
-- **Nginx**: ingress-nginx (production) / Nginx container (local dev)
-
-## API Endpoints
-
-- GET /api/health
-- POST /api/query — natural-language-to-SQL demo (read-only, restricted to `contacts`/`payments`)
-- POST /api/auth — login check against the `users` table
-- GET /api/plans — available Stripe subscription plans (disabled — payments off, returns 503)
-- POST /api/subscribe — create a Stripe customer and subscription (disabled — payments off, returns 503)
+This started as a full-stack application (Express API, RabbitMQ worker,
+PostgreSQL, Redis) deployed to Kubernetes. The backend existed solely to power
+a natural-language-to-SQL demo page; removing that page removed the need for
+any server, so the project is now a static site. The previous backend, worker,
+and Kubernetes manifests remain available in the git history.
