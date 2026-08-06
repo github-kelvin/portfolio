@@ -1,5 +1,4 @@
 import { useEffect } from 'react';
-import { Link } from 'react-router-dom';
 
 const defaultProfessional = {
   name: 'Kelvin Joaquin',
@@ -118,9 +117,6 @@ function Home() {
                   {skill}
                 </div>
               ))}
-            </div>
-            <div className="section-actions">
-              <Link to="/demo" className="btn btn-primary">View Demo</Link>
             </div>
           </section>
 
