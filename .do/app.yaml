@@ -1,10 +1,12 @@
 name: portfolio-static
 static_sites:
   - name: web
-    github:
-      repo: github-kelvin/portfolio
+    # Public-repo clone source: avoids the DO<->GitHub OAuth app integration.
+    # deploy_on_push is not available here, so .github/workflows/deploy-static.yml
+    # triggers a deployment on push to main instead.
+    git:
+      repo_clone_url: https://github.com/github-kelvin/portfolio.git
       branch: main
-      deploy_on_push: true
     source_dir: frontend
     build_command: npm run build
     output_dir: dist

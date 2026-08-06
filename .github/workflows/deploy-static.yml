@@ -1,0 +1,25 @@
+name: Deploy static site
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-static
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Trigger App Platform deployment
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install doctl
+        uses: digitalocean/action-doctl@v2
+        with:
+          token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+
+      # The app uses a plain git clone source (no DO<->GitHub OAuth app), so
+      # pushes do not auto-deploy; trigger the deployment explicitly.
+      - name: Create deployment and wait
+        run: doctl apps create-deployment "${{ vars.APP_ID }}" --wait
