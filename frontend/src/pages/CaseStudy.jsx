@@ -31,6 +31,12 @@ function CaseStudy() {
         <h1>{study.title}</h1>
         <p className="outcome">{study.outcome}</p>
 
+        {study.link && (
+          <a className="cs-link" href={study.link} target="_blank" rel="noreferrer">
+            Visit {study.link.replace(/^https?:\/\//, '')} <span>→</span>
+          </a>
+        )}
+
         <div className="context-strip reveal">
           <div>Company<strong>{study.context.company}</strong></div>
           <div>Role<strong>{study.context.role}</strong></div>

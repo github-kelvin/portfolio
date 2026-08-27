@@ -4,8 +4,23 @@ import { caseStudies } from './caseStudies';
 const REQUIRED_STRINGS = ['slug', 'kicker', 'title', 'summary', 'outcome'];
 
 describe('caseStudies content integrity', () => {
-  it('has exactly five studies', () => {
-    expect(caseStudies).toHaveLength(5);
+  it('has exactly six studies', () => {
+    expect(caseStudies).toHaveLength(6);
+  });
+
+  it('carries no unfilled metric placeholders', () => {
+    for (const s of caseStudies) {
+      for (const r of s.results) {
+        expect(r.placeholder, `${s.slug} · ${r.label}`).toBeUndefined();
+        expect(r.value, `${s.slug} · ${r.label}`).not.toMatch(/metric needed/i);
+      }
+    }
+  });
+
+  it('has valid https links where present', () => {
+    for (const s of caseStudies.filter((s) => s.link !== undefined)) {
+      expect(s.link, s.slug).toMatch(/^https:\/\/\S+$/);
+    }
   });
 
   it('has unique, url-safe slugs', () => {

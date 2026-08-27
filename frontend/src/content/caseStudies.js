@@ -1,6 +1,6 @@
 // All case-study content lives here as data; pages render from it.
-// `[metric needed]` values are deliberate placeholders awaiting real numbers —
-// never replace them with invented figures.
+// Every `results` figure must be one you can substantiate — never add an
+// invented number. A study carrying only one verified figure is correct.
 export const caseStudies = [
   {
     slug: 'payments-licensing',
@@ -39,8 +39,6 @@ export const caseStudies = [
       },
     ],
     results: [
-      { value: '[metric needed]', label: 'payment gateways in production', placeholder: true },
-      { value: '[metric needed]', label: 'subscriptions supported', placeholder: true },
       { value: 'Zero', label: 'downtime during migrations' },
     ],
     tags: ['Node.js', 'Payments', 'Licensing', 'MySQL', 'Redis'],
@@ -100,8 +98,6 @@ export const caseStudies = [
       },
     ],
     results: [
-      { value: '[metric needed]', label: 'authentications per month', placeholder: true },
-      { value: '[metric needed]', label: 'OAuth providers supported', placeholder: true },
       { value: 'Zero', label: 'forced global logouts during migrations' },
     ],
     tags: ['Auth', 'OAuth', 'Node.js', 'Redis', 'MySQL'],
@@ -162,8 +158,6 @@ export const caseStudies = [
       },
     ],
     results: [
-      { value: '[metric needed]', label: 'endpoints migrated', placeholder: true },
-      { value: '[metric needed]', label: 'deploy time improvement', placeholder: true },
       { value: 'Zero', label: 'revenue-impacting incidents during cutover' },
     ],
     tags: ['PHP', 'Node.js', 'Strangler fig', 'MySQL', 'Docker'],
@@ -222,8 +216,6 @@ export const caseStudies = [
       },
     ],
     results: [
-      { value: '[metric needed]', label: 'services extracted', placeholder: true },
-      { value: '[metric needed]', label: 'events per day through the broker', placeholder: true },
       { value: 'Independent', label: 'deploys per service' },
     ],
     tags: ['RabbitMQ', 'Microservices', 'Node.js', 'Docker'],
@@ -286,8 +278,6 @@ export const caseStudies = [
     ],
     results: [
       { value: '14 years', label: 'of continuous operation' },
-      { value: '[metric needed]', label: 'systems maintained', placeholder: true },
-      { value: '[metric needed]', label: 'regional offices served', placeholder: true },
     ],
     tags: ['CI/CD', 'Docker', 'Infrastructure', 'Linux'],
     diagram: {
@@ -306,6 +296,71 @@ export const caseStudies = [
         { from: 'ci', to: 'central' },
         { from: 'ci', to: 'regional' },
         { from: 'regional', to: 'offices' },
+      ],
+    },
+  },
+  {
+    slug: 'bloomgate',
+    kicker: 'Bloomgate · Own product',
+    title: 'Un-distributing a SaaS: five services back into one',
+    summary:
+      'A product built as microservices, then deliberately consolidated — broker removed, cluster decommissioned, nothing lost.',
+    outcome:
+      'Five deployables over a message broker on Kubernetes, consolidated into a single backend on one droplet — with the broker, the managed cluster, and the managed database all decommissioned after a rehearsed cutover.',
+    link: 'https://bloomgate.app',
+    context: {
+      company: 'Bloomgate (independent product)',
+      role: 'Founder & sole engineer',
+      timeframe: 'Jun 2026 – present',
+      stack: 'Node.js · TypeScript · Prisma · PostgreSQL · pg-boss',
+    },
+    problem: [
+      'Bloomgate is a Telegram channel-management SaaS I build and run alone. It started with an architecture sized for a team: five deployables talking over RabbitMQ, a managed Kubernetes cluster, a managed database, and a container registry — serving a workload one process could carry.',
+      'The distribution bought nothing I needed. Service boundaries drawn for organizational reasons became partial-failure modes and network hops for a single operator, and every incident meant reasoning across processes instead of reading one stack trace.',
+    ],
+    decisions: [
+      {
+        title: 'Consolidate the services before optimizing any of them',
+        why: 'Merging the four extracted services back into one backend removed the network hops and partial-failure modes outright, rather than tuning them.',
+        rejected:
+          'Tuning the distributed system in place — optimizing a topology that should not have existed.',
+      },
+      {
+        title: 'pg-boss over RabbitMQ, which deleted the outbox entirely',
+        why: 'A Postgres-backed queue enqueues a job inside the caller’s own Prisma transaction, so the outbox table and its polling relay — machinery that existed only because a broker publish cannot join a database transaction — were deleted rather than maintained.',
+        rejected:
+          'Keeping the broker plus the outbox — a second datastore and a bespoke relay to compensate for the first.',
+      },
+      {
+        title: 'Rehearse the cutover, verify the dump, then delete',
+        why: 'The full data path was rehearsed against a scratch database, and the final dump was checksum- and restore-list-verified before a single managed service was destroyed.',
+        rejected:
+          'Cutting over live while keeping the old stack as a fallback — pays for both and rehearses neither.',
+      },
+    ],
+    results: [
+      { value: '5 → 1', label: 'services in production' },
+      { value: 'Zero', label: 'data loss at cutover' },
+      { value: '3', label: 'managed services decommissioned' },
+    ],
+    tags: ['Node.js', 'TypeScript', 'PostgreSQL', 'pg-boss', 'Prisma'],
+    diagram: {
+      title: 'Consolidated architecture after the migration',
+      width: 640,
+      height: 232,
+      nodes: [
+        { id: 'spa', x: 20, y: 40, w: 130, h: 44, label: 'Frontend SPA' },
+        { id: 'tg', x: 20, y: 148, w: 130, h: 44, label: 'Telegram', sub: 'webhook' },
+        { id: 'be', x: 240, y: 90, w: 150, h: 52, label: 'backend', sub: 'Express + Prisma', accent: true },
+        { id: 'jobs', x: 470, y: 40, w: 140, h: 48, label: 'pg-boss', sub: 'jobs + cron' },
+        { id: 'pg', x: 470, y: 144, w: 140, h: 48, label: 'PostgreSQL' },
+      ],
+      edges: [
+        { from: 'spa', to: 'be' },
+        { from: 'tg', to: 'be' },
+        { from: 'be', to: 'jobs' },
+        { from: 'be', to: 'pg' },
+        { from: 'jobs', to: 'pg' },
       ],
     },
   },
