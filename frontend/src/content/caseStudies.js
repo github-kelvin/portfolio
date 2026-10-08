@@ -300,6 +300,73 @@ export const caseStudies = [
     },
   },
   {
+    slug: 'docuvera-agentic-workflows',
+    kicker: 'Origo BPO · Docuvera',
+    title: 'Agentic workflow automation across a multi-repository platform',
+    summary:
+      'A skills boilerplate adopted across repositories — each team configures it to their own sources and conventions — with cloud agents offloading code review, test runs, and spec apply.',
+    outcome:
+      'A skills boilerplate rolled out across multiple repositories, giving every team a consistent set of agentic automations while each repo configures them to its own sources and conventions. Cloud copilot agents handle compute-heavy executions — code review, test runs, and spec apply — asynchronously.',
+    context: {
+      company: 'Origo BPO (Docuvera)',
+      role: 'Software Engineer',
+      timeframe: '2026 – present',
+      stack: 'Claude · Cloud agents · CI/CD · Multi-repo',
+    },
+    problem: [
+      'Docuvera’s platform spans multiple repositories, each owned by a different team with its own conventions, tooling, and data sources. There was no consistent starting point for agentic automation — each team that wanted it had to design their skills from scratch.',
+      'Heavy workflow tasks — thorough code review, full test execution, and spec apply — were either skipped under time pressure or blocked the local session long enough to disrupt flow.',
+    ],
+    decisions: [
+      {
+        title: 'Boilerplate over a shared layer',
+        why: 'A boilerplate gives every team the same skill structure and available automations as a starting point, while leaving each repo free to configure sources, thresholds, and conventions to match its own team’s approach.',
+        rejected:
+          'A centralized shared layer — teams have different data sources and workflows, so a one-size execution path would either be too generic to be useful or require constant exceptions.',
+      },
+      {
+        title: 'Cloud copilot agents for heavy executions',
+        why: 'Code review, test runs, and spec apply are compute-intensive and interruptible; offloading them to cloud agents keeps the local session free and lets results arrive asynchronously without blocking the engineer.',
+        rejected:
+          'Running all skill executions locally — heavy tasks either get skipped under time pressure or hold up the session for minutes.',
+      },
+      {
+        title: 'Audit existing practices before writing the boilerplate',
+        why: 'Reviewing what each team already did surfaced the common structure worth encoding, so the boilerplate reflected real patterns rather than an idealized starting point no one would adapt.',
+        rejected:
+          'Writing the boilerplate without the audit — risks producing a template that fits none of the existing repos well enough to adopt.',
+      },
+    ],
+    results: [
+      { value: 'Consistent', label: 'skill availability across repos' },
+      { value: 'Async', label: 'code review, test runs, and spec apply via cloud agents' },
+      { value: 'Increased', label: 'developer productivity — no session held by a long-running skill' },
+    ],
+    tags: ['Agentic AI', 'Cloud agents', 'Workflow automation', 'Multi-repo', 'CI/CD'],
+    diagram: {
+      title: 'Skills boilerplate with cloud agent offload',
+      width: 700,
+      height: 260,
+      nodes: [
+        { id: 'repos', x: 20, y: 105, w: 120, h: 50, label: 'Repositories', sub: 'A · B · C · …' },
+        { id: 'skills', x: 200, y: 105, w: 150, h: 50, label: 'Skills boilerplate', accent: true },
+        { id: 'local', x: 420, y: 40, w: 150, h: 50, label: 'Local session', sub: 'planning' },
+        { id: 'cloud', x: 420, y: 120, w: 150, h: 50, label: 'Cloud agents', sub: 'copilot' },
+        { id: 'exec', x: 600, y: 60, w: 85, h: 40, label: 'Plan execution' },
+        { id: 'review', x: 600, y: 115, w: 85, h: 40, label: 'Code review' },
+        { id: 'tests', x: 600, y: 170, w: 85, h: 40, label: 'Tests' },
+      ],
+      edges: [
+        { from: 'repos', to: 'skills' },
+        { from: 'skills', to: 'local' },
+        { from: 'skills', to: 'cloud' },
+        { from: 'cloud', to: 'exec' },
+        { from: 'cloud', to: 'review' },
+        { from: 'cloud', to: 'tests' },
+      ],
+    },
+  },
+  {
     slug: 'bloomgate',
     kicker: 'Bloomgate · Own product',
     title: 'Un-distributing a SaaS: five services back into one',

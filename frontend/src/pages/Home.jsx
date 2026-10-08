@@ -13,6 +13,7 @@ const skillDomains = [
 ];
 
 const experience = [
+  { role: 'Software Engineer — Origo BPO (Docuvera)', dates: '2026–present' },
   { role: 'Senior Software Developer — SplitmediaLabs', dates: '2014–2025' },
   { role: 'Technical Consultant — Cooperative Development Authority', dates: '2010–2024' },
   { role: 'Associate Technical Staff — Fujitsu Ten Solutions', dates: '2010–2014' },
